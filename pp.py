@@ -76,21 +76,30 @@ class SubmissionWatcher(Thread):
 
     def get_commenters(self):
         """Get all commenters and their comments"""
-        commenters = dict()  # author to comments dict
+        commenters = dict()  # author name to author-comments dict
         comments = deque(self.target.comments)  # comments left to treat
         while len(comments):
             c = comments.popleft()
-            comments.extend(c.replies)
-
-            if c.author in self.commenters_seen:
+            try:
+                comments.extend(c.replies)
+            except AttributeError:
+                # we have a MoreComments object
+                comments.extend(c.comments())
                 continue
 
-            if c.author not in commenters:
-                commenters[c.author] = []
-            commenters[c.author].append(c)
+            if c.author is None:
+                continue
+
+            author_name = c.author.name
+            if author_name in self.commenters_seen:
+                continue
+
+            if author_name not in commenters:
+                commenters[author_name] = (c.author, [])
+            commenters[author_name][1].append(c.permalink)
 
         self.commenters_seen |= commenters.keys()
-        return commenters
+        return commenters.values()
 
     def we_can_handle_it(self):
         """Return whether we're able to watch the submission"""
@@ -138,7 +147,7 @@ class SubmissionWatcher(Thread):
         for user, comments in self.popcorn_pissers:
             s.write("* /u/%s: " % user.name)
             for i, c in enumerate(comments):
-                s.write("[%s](%s) " % (i + 1, c.permalink))
+                s.write("[%s](%s) " % (i + 1, c))
             s.write("\n")
         return s.getvalue()
 
