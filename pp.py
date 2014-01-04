@@ -51,12 +51,13 @@ class PopcornPisser(Thread):
 
 
 class SubmissionWatcher(Thread):
-    """Each instance is responsible of watching a single reddit thread"""
-    def __init__(self, thread):
+    """Each instance is responsible for watching a single reddit thread"""
+    def __init__(self, submission):
         super(SubmissionWatcher, self).__init__()
-        self.thread = thread
+        self.submission = submission
         self.popcorn_pissers = []
         self.commenters_seen = set()
+        self.comment = None
 
     def is_member_of_subreddit(self, user, subreddit):
         """Return whether `user` is active in `subreddit`
@@ -67,21 +68,36 @@ class SubmissionWatcher(Thread):
         return False
 
     def get_commenters(self):
+        """Get all commenters and their comments"""
         return []
 
+    def we_can_handle_it(self):
+        """Return whether we're able to watch the submission"""
+        return not (self.submission.is_self or
+                    self.submission.domain.endswith('reddit.com'))
+
     def run(self):
-        logging.info("Watching submission %s", self.thread)
+        logging.info("Watching submission %s", self.submission.short_link)
+        if not self.we_can_handle_it():
+            logging.info("Stopping watcher for submission %s: unable to handle it",
+                         self.submission.short_link)
+            return
+
         while True:
             for user, comments in self.get_commenters():
                 if not self.is_member_of_subreddit(user, self.target_subreddit):
                     self.popcorn_pissers.append((user, comments))
 
             logging.info("Found %s popcorn pissers in thread %s",
-                         len(self.popcorn_pissers), self.thread)
+                         len(self.popcorn_pissers), self.submission)
             self.generate_report()
 
     def generate_report(self):
-        pass
+        report = ""
+        if self.comment is None:
+            self.comment = self.submission.add_comment(report)
+        else:
+            self.comment.edit(report)
 
 
 if __name__ == '__main__':
