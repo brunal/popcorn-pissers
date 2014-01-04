@@ -82,12 +82,18 @@ class SubmissionWatcher(Thread):
         commenters = dict()  # author name to author-comments dict
         comments = deque(self.target.comments)  # comments left to treat
         while len(comments):
+            logging.debug("%s: %s users seen, %s messages left to do",
+                          self.short_name, len(commenters), len(comments))
+
             c = comments.popleft()
             try:
                 comments.extend(c.replies)
             except AttributeError:
                 # we have a MoreComments object
-                comments.extend(c.comments())
+                try:
+                    comments.extend(c.comments())
+                except:
+                    logging.exception("Unable to manage MoreComments %s", c.fullname)
                 continue
 
             if c.author is None:
