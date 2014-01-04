@@ -24,7 +24,7 @@ logging.getLogger().setLevel(logging.INFO)
 config = ConfigParser()
 config.read('settings.txt')
 
-r = praw.Reddit("popcorn-pissers")
+r = praw.Reddit("popcorn-pissers by /u/Laugarhraun")
 r.login(config.get('auth', 'username'),
         config.get('auth', 'password'))
 logging.info("Bot logged in")
@@ -141,6 +141,7 @@ class SubmissionWatcher(Thread):
             for user, comments in self.get_commenters():
                 if not self.is_member_of_subreddit(user, self.target.subreddit):
                     self.popcorn_pissers.append((user, comments))
+                    logging.debug("Found a popcorn pisser: %s!", user.name)
 
             logging.info("Found %s popcorn pissers in thread %s",
                          len(self.popcorn_pissers), self.short_name)
