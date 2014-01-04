@@ -3,8 +3,15 @@
 This module defines a reddit bot that will look at SRD submissions, follow the
 link and look for "popcorn pissers".
 """
-from configparser import ConfigParser
-from io import StringIO
+try:
+    # python 3
+    from configparser import ConfigParser
+    from io import StringIO
+except ImportError:
+    # python 2
+    from ConfigParser import ConfigParser
+    from cStringIO import StringIO
+
 from threading import Thread
 from time import sleep
 from collections import deque
