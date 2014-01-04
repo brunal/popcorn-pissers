@@ -59,6 +59,7 @@ class SubmissionWatcher(Thread):
 
         self.submission = submission
         self.target = r.get_submission(submission.url)
+        self.short_name = submission.short_link
 
         self.popcorn_pissers = []
         self.commenters_seen = set()
@@ -76,6 +77,8 @@ class SubmissionWatcher(Thread):
 
     def get_commenters(self):
         """Get all commenters and their comments"""
+        logging.debug("Looking for commenters in %s target", self.short_name)
+
         commenters = dict()  # author name to author-comments dict
         comments = deque(self.target.comments)  # comments left to treat
         while len(comments):
@@ -99,6 +102,9 @@ class SubmissionWatcher(Thread):
             commenters[author_name][1].append(c.permalink)
 
         self.commenters_seen |= commenters.keys()
+
+        logging.debug("Found %s commenters in %s target",
+                      len(commenters), self.short_name)
         return commenters.values()
 
     def we_can_handle_it(self):
@@ -107,20 +113,22 @@ class SubmissionWatcher(Thread):
                self.submission.domain.endswith('reddit.com')
 
     def run(self):
-        logging.info("Watching submission %s", self.submission.short_link)
+        logging.info("Watching submission %s", self.short_name)
         if not self.we_can_handle_it():
             logging.info("Stopping watcher for submission %s: unable to handle it",
-                         self.submission.short_link)
+                         self.short_name)
             return
 
         nothing_new = 0
         while True:
+            logging.debug("SW for %s starts working", self.short_name)
+
             for user, comments in self.get_commenters():
                 if not self.is_member_of_subreddit(user, self.target.subreddit):
                     self.popcorn_pissers.append((user, comments))
 
             logging.info("Found %s popcorn pissers in thread %s",
-                         len(self.popcorn_pissers), self.submission.short_link)
+                         len(self.popcorn_pissers), self.short_name)
             if len(self.popcorn_pissers) == 0:
                 nothing_new += 1
             else:
@@ -129,12 +137,14 @@ class SubmissionWatcher(Thread):
             if nothing_new == 5:
                 # 5 times without any new popcorn pisser = we stop
                 logging.info("Nothing's pissing in %s anymore. Stopping.",
-                             self.submission.short_link)
+                             self.short_name)
                 return
 
             sleep(30 * 60)
 
     def generate_report(self):
+        logging.info("Writing a report for submissions %s",
+                     self.short_name)
         report = self.generate_report_text()
         if self.comment_posted is None:
             self.comment_posted = self.submission.add_comment(report)
