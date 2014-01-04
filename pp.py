@@ -104,6 +104,7 @@ class SubmissionWatcher(Thread):
                          self.submission.short_link)
             return
 
+        nothing_new = 0
         while True:
             for user, comments in self.get_commenters():
                 if not self.is_member_of_subreddit(user, self.target.subreddit):
@@ -111,8 +112,18 @@ class SubmissionWatcher(Thread):
 
             logging.info("Found %s popcorn pissers in thread %s",
                          len(self.popcorn_pissers), self.submission.short_link)
-            if len(self.popcorn_pissers) > 0:
+            if len(self.popcorn_pissers) == 0:
+                nothing_new += 1
+            else:
                 self.generate_report()
+
+            if nothing_new == 5:
+                # 5 times without any new popcorn pisser = we stop
+                logging.info("Nothing's pissing in %s anymore. Stopping.",
+                             self.submission.short_link)
+                return
+
+            sleep(30 * 60)
 
     def generate_report(self):
         report = self.generate_report_text()
