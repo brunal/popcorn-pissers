@@ -21,6 +21,7 @@ r.login(config.get('auth', 'username'),
 logging.info("Bot logged in")
 
 subreddit = config.get('subreddit', 'subreddit')
+s = r.get_subreddit(subreddit)
 
 
 class PopcornPisser(Thread):
@@ -30,7 +31,11 @@ class PopcornPisser(Thread):
         self.submissions_seen = set()
 
     def get_submissions_to_watch(self):
-        return []
+        """Get hot submissions that haven't been treated"""
+        hot = set(s.get_hot(limit=10))
+        hot_and_new = filter(lambda h: h.name not in self.submissions_seen, hot)
+        self.submissions_seen |= {h.name for h in hot_and_new}
+        return hot_and_new
 
     def run(self):
         logging.info("Bot started")
