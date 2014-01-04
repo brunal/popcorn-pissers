@@ -120,13 +120,13 @@ class SubmissionWatcher(Thread):
 
             if author_name not in commenters:
                 commenters[author_name] = (c.author, [])
+                yield commenters[author_name]
             commenters[author_name][1].append(c.permalink)
 
         self.commenters_seen |= commenters.keys()
 
         logging.debug("Found %s commenters in %s target",
                       len(commenters), self.short_name)
-        return commenters.values()
 
     def we_can_handle_it(self):
         """Return whether we're able to watch the submission"""
