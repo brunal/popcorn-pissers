@@ -94,8 +94,8 @@ class SubmissionWatcher(Thread):
 
     def we_can_handle_it(self):
         """Return whether we're able to watch the submission"""
-        return not (self.submission.is_self or
-                    self.submission.domain.endswith('reddit.com'))
+        return (not self.submission.is_self) and \
+               self.submission.domain.endswith('reddit.com')
 
     def run(self):
         logging.info("Watching submission %s", self.submission.short_link)
