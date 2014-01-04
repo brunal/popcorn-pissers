@@ -80,7 +80,15 @@ class SubmissionWatcher(Thread):
         pissed in the popcorn in `subreddit` he may be seen as a member.
         """
         overview = user.get_overview(limit=100)
-        return any(o.subreddit == subreddit for o in overview)
+        for o in overview:
+            if o.subreddit == subreddit:
+                try:
+                    # must not be a comment from the watched thread
+                    if o.submission != self.submission:
+                        return True
+                except AttributeError:
+                    # `user` submitted something in that subreddit
+                    return True
 
     def get_commenters(self):
         """Get all commenters and their comments"""
