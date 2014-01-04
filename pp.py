@@ -58,7 +58,7 @@ class SubmissionWatcher(Thread):
         super(SubmissionWatcher, self).__init__()
 
         self.submission = submission
-        self.target = r.get_submission(submission.url)
+        self.target = None  # load it later, in its own thread
         self.short_name = submission.short_link
 
         self.popcorn_pissers = []
@@ -118,6 +118,8 @@ class SubmissionWatcher(Thread):
             logging.info("Stopping watcher for submission %s: unable to handle it",
                          self.short_name)
             return
+
+        self.target = r.get_submission(self.submission.url)
 
         nothing_new = 0
         while True:
