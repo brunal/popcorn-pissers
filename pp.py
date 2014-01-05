@@ -84,10 +84,12 @@ class SubmissionWatcher(Thread):
             if o.subreddit == subreddit:
                 try:
                     # must not be a comment from the watched thread
-                    if o.submission != self.submission:
+                    if o.submission != self.target:
+                        logging.debug("%s cleared by comment %s", user.name, o.permalink)
                         return True
                 except AttributeError:
                     # `user` submitted something in that subreddit
+                    logging.debug("%s cleared by submission %s", user.name, o.short_link)
                     return True
 
     def get_commenters(self):
