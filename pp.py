@@ -15,7 +15,6 @@ except ImportError:
 from threading import Thread
 from time import sleep
 import heapq
-from types import MethodType
 from functools import total_ordering
 from collections import deque
 import logging
@@ -25,10 +24,13 @@ import praw
 logging.getLogger().setLevel(logging.INFO)
 
 logging.debug("Patching praw.objects.Comment for comp on created_utc")
-C = praw.objects.Comment
-C.__gt__ = lambda self, other: MethodType(self.created_utc > other.created_utc, self)
-C = total_ordering(C)
-praw.objects.Comment = C
+
+
+@total_ordering
+class MyComment(praw.objects.Comment):
+    def __gt__(self, other):
+        return self.created_utc > other.created_utc
+praw.objects.Comment = MyComment
 
 config = ConfigParser()
 config.read('settings.txt')
