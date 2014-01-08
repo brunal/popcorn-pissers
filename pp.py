@@ -14,12 +14,21 @@ except ImportError:
 
 from threading import Thread
 from time import sleep
+import heapq
+from types import MethodType
+from functools import total_ordering
 from collections import deque
 import logging
 
 import praw
 
 logging.getLogger().setLevel(logging.INFO)
+
+logging.debug("Patching praw.objects.Comment for comp on created_utc")
+C = praw.objects.Comment
+C.__gt__ = lambda self, other: MethodType(self.created_utc > other.created_utc, self)
+C = total_ordering(C)
+praw.objects.Comment = C
 
 config = ConfigParser()
 config.read('settings.txt')
@@ -90,23 +99,30 @@ class SubmissionWatcher(Thread):
                     # `user` submitted something in that subreddit
                     return True
 
-    def get_commenters(self):
-        """Get all commenters and their comments"""
+    def get_recent_commenters(self):
+        """Get all commenters after submission creation and their comments
+
+        We need to handle the comments from oldest to youngest, so that if a
+        redditor posted before and after the thread submission he's always
+        cleared. We need quick oldest retrieval and insertion of comment so
+        we'll use a heap."""
         logging.debug("Looking for commenters in %s target", self.short_name)
 
         commenters = dict()  # author name to author-comments dict
-        comments = deque(self.target.comments)  # comments left to treat
+        comments = heapq.heapify(self.target.comments)
         while len(comments):
             logging.debug("%s: %s users seen, %s messages left to do",
                           self.short_name, len(commenters), len(comments))
 
-            c = comments.popleft()
+            c = heapq.heappop(comments)
             try:
-                comments.extend(c.replies)
+                for c_ in c.replies:
+                    heapq.heappush(comments, c_)
             except AttributeError:
                 # we have a MoreComments object
                 try:
-                    comments.extend(c.comments())
+                    for c_ in c.comments():
+                        heapq.heappush(comments, c_)
                 except:
                     logging.exception("Unable to manage MoreComments %s", c.fullname)
                 continue
@@ -116,6 +132,11 @@ class SubmissionWatcher(Thread):
 
             author_name = c.author.name
             if author_name in self.commenters_seen:
+                continue
+
+            if c.created_utc < self.submission.created_utc:
+                # comment older than the submission, whitelist the poster
+                self.commenters_seen.add(author_name)
                 continue
 
             if author_name not in commenters:
@@ -146,7 +167,7 @@ class SubmissionWatcher(Thread):
         while True:
             logging.debug("SW for %s starts working", self.short_name)
 
-            for user, comments in self.get_commenters():
+            for user, comments in self.get_recent_commenters():
                 if not self.is_member_of_subreddit(user, self.target.subreddit):
                     self.popcorn_pissers.append((user, comments))
                     logging.debug("Found a popcorn pisser: %s!", user.name)
