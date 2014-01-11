@@ -15,11 +15,22 @@ except ImportError:
 from threading import Thread
 from time import sleep
 from collections import deque
-import logging
+import logging as log
 
 import praw
 
-logging.getLogger().setLevel(logging.INFO)
+logging = log.getLogger('bru.pp')
+logging.setLevel(log.DEBUG)
+
+stderr = log.StreamHandler()
+stderr.setLevel(log.INFO)
+logging.addHandler(stderr)
+
+to_file = log.FileHandler('log.txt')
+to_file.setLevel(log.DEBUG)
+logging.addHandler(to_file)
+
+logging.debug("Loggers configured")
 
 config = ConfigParser()
 config.read('settings.txt')
@@ -89,7 +100,7 @@ class SubmissionWatcher(Thread):
                         return True
                 except AttributeError:
                     # `user` submitted something in that subreddit
-                    logging.debug("%s cleared by submission %s", user.name, o.short_link)
+                    logging.debug("%s cleared by item %s", user.name, o)
                     return True
 
     def get_commenters(self):
