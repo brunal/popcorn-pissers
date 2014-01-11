@@ -16,7 +16,6 @@ from threading import Thread
 from time import sleep
 import heapq
 from functools import total_ordering
-from collections import deque
 import logging as log
 
 import praw
