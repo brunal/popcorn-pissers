@@ -41,8 +41,8 @@ class PopcornPisser(Thread):
 
     def get_submissions_to_watch(self):
         """Get hot submissions that haven't been treated"""
-        hot = set(s.get_hot(limit=10))
-        hot_and_new = filter(lambda h: h.name not in self.submissions_seen, hot)
+        hot = s.get_hot(limit=10)
+        hot_and_new = [h for h in hot if h.name not in self.submissions_seen]
         self.submissions_seen |= {h.name for h in hot_and_new}
         return hot_and_new
 
