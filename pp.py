@@ -17,7 +17,6 @@ from time import sleep
 import heapq
 from types import MethodType
 from functools import total_ordering
-from collections import deque
 import logging
 
 import praw
