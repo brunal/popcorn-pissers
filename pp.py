@@ -70,7 +70,12 @@ class PopcornPisser(Thread):
         self.submissions_seen = set()
 
     def get_submissions_to_watch(self):
-        """Get hot submissions that haven't been treated"""
+        """Get hot submissions that haven't been treated
+
+        Returns
+        -------
+        hot_and_new : praw.objects.Submission list
+        """
         hot = s.get_hot(limit=10)
         hot_and_new = [h for h in hot if h.name not in self.submissions_seen]
         self.submissions_seen |= {h.name for h in hot_and_new}
@@ -90,7 +95,12 @@ class PopcornPisser(Thread):
 
 
 class SubmissionWatcher(Thread):
-    """Each instance is responsible for watching a single reddit thread"""
+    """Each instance is responsible for watching a single reddit thread
+
+    Parameters
+    ----------
+    submission : praw.objects.Submission
+    """
     def __init__(self, submission):
         super(SubmissionWatcher, self).__init__()
 
@@ -108,6 +118,15 @@ class SubmissionWatcher(Thread):
 
         That check is more tricky than it might seem: if `user` previously
         pissed in the popcorn in `subreddit` he may be seen as a member.
+
+        Parameters
+        ----------
+        user : praw.objects.Redditor
+        subreddit : praw.objects.Subreddit
+
+        Returns
+        -------
+        belong : bool
         """
         overview = user.get_overview(limit=100)
         for o in overview:
@@ -129,7 +148,7 @@ class SubmissionWatcher(Thread):
         We need to handle the comments from oldest to youngest, so that if a
         redditor posted before and after the thread submission he's always
         cleared. We need quick oldest retrieval and insertion of comment so
-        we'll use a heap."""
+        we use a heap.
 
         We use OrderedComment objects instead of praw.objects.Comment objects for
         an ordering on utc creation date."""
