@@ -33,14 +33,23 @@ logging.addHandler(to_file)
 
 logging.debug("Loggers configured")
 
-logging.debug("Patching praw.objects.Comment for comp on created_utc")
-
 
 @total_ordering
-class MyComment(praw.objects.Comment):
+class OrderedComment(praw.objects.Comment):
+    """Comment with sort on creation date
+
+
+    Parameters
+    ----------
+    comment : praw.objects.Comment
+        Original comment object. Shares state with `self`
+    """
+
+    def __init__(self, comment):
+        self.__dict__ = comment.__dict__
+
     def __gt__(self, other):
         return self.created_utc > other.created_utc
-praw.objects.Comment = MyComment
 
 config = ConfigParser()
 config.read('settings.txt')
@@ -120,10 +129,13 @@ class SubmissionWatcher(Thread):
         redditor posted before and after the thread submission he's always
         cleared. We need quick oldest retrieval and insertion of comment so
         we'll use a heap."""
+
+        We use OrderedComment objects instead of praw.objects.Comment objects for
+        an ordering on utc creation date."""
         logging.debug("Looking for commenters in %s target", self.short_name)
 
         commenters = dict()  # author name to author-comments dict
-        comments = heapq.heapify(self.target.comments)
+        comments = heapq.heapify(map(OrderedComment, self.target.comments))
         while len(comments):
             logging.debug("%s: %s users seen, %s messages left to do",
                           self.short_name, len(commenters), len(comments))
@@ -131,12 +143,12 @@ class SubmissionWatcher(Thread):
             c = heapq.heappop(comments)
             try:
                 for c_ in c.replies:
-                    heapq.heappush(comments, c_)
+                    heapq.heappush(comments, OrderedComment(c_))
             except AttributeError:
                 # we have a MoreComments object
                 try:
                     for c_ in c.comments():
-                        heapq.heappush(comments, c_)
+                        heapq.heappush(comments, OrderedComment(c_))
                 except:
                     logging.exception("Unable to manage MoreComments %s", c.fullname)
                 continue
