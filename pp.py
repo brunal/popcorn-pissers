@@ -121,6 +121,7 @@ class SubmissionWatcher(Thread):
                     # `user` submitted something in that subreddit
                     logging.debug("%s cleared by item %s", user.name, o)
                     return True
+        return False
 
     def get_recent_commenters(self):
         """Get all commenters after submission creation and their comments
