@@ -18,6 +18,7 @@ import heapq
 from functools import total_ordering
 import logging as log
 
+from enum import Enum
 import praw
 
 logging = log.getLogger('bru.pp')
@@ -113,35 +114,6 @@ class SubmissionWatcher(Thread):
 
         self.comment_posted = None
 
-    def is_member_of_subreddit(self, user, subreddit):
-        """Return whether `user` is active in `subreddit`
-
-        That check is more tricky than it might seem: if `user` previously
-        pissed in the popcorn in `subreddit` he may be seen as a member.
-
-        Parameters
-        ----------
-        user : praw.objects.Redditor
-        subreddit : praw.objects.Subreddit
-
-        Returns
-        -------
-        belong : bool
-        """
-        overview = user.get_overview(limit=100)
-        for o in overview:
-            if o.subreddit == subreddit:
-                try:
-                    # must not be a comment from the watched thread
-                    if o.submission != self.target:
-                        logging.debug("%s cleared by comment %s", user.name, o.permalink)
-                        return True
-                except AttributeError:
-                    # `user` submitted something in that subreddit
-                    logging.debug("%s cleared by item %s", user.name, o)
-                    return True
-        return False
-
     def get_recent_commenters(self):
         """Get all commenters after submission creation and their comments
 
@@ -214,8 +186,9 @@ class SubmissionWatcher(Thread):
             logging.debug("SW for %s starts working", self.short_name)
 
             for user, comments in self.get_recent_commenters():
-                if not self.is_member_of_subreddit(user, self.target.subreddit):
-                    self.popcorn_pissers.append((user, comments))
+                m = Membership(self.target, user)
+                if m.category is not Membership.Category.THERE:
+                    self.popcorn_pissers.append((m, comments))
                     logging.debug("Found a popcorn pisser: %s!", user.name)
 
             logging.info("Found %s popcorn pissers in thread %s",
@@ -244,13 +217,106 @@ class SubmissionWatcher(Thread):
 
     def generate_report_text(self):
         s = StringIO()
-        s.write("I found the following popcorn pissers in the thread:\n\n")
-        for user, comments in self.popcorn_pissers:
-            s.write("* /u/%s: " % user.name)
-            for i, c in enumerate(comments):
-                s.write("[%s](%s) " % (i + 1, c))
-            s.write("\n")
+        s.write("I found popcorn pissers in the thread:\n\n")
+        # order by category
+        by_category = {mem.category: (mem, comments)
+                       for mem, comments in self.popcorn_pissers}
+        for category in [Membership.Category.HERE,
+                         Membership.Category.NO,
+                         Membership.Category.BOTH]:
+            s.write("Those redditors are %s" % category)
+            for mem, comments in by_category[category]:
+                s.write("* /u/%s: " % mem.redditor)
+                for i, c in enumerate(comments):
+                    s.write("[%s](%s) " % (i + 1, c))
+                s.write("\n")
         return s.getvalue()
+
+
+class Membership(object):
+    """Determine whether `redditor` is pissing in the popcorn.
+
+    That check is more tricky than it might seem: if `redditor` previously
+    pissed in the popcorn in `subreddit` he may be seen as a member.
+
+    A `score` is established for each redditor and a `category` is assigned,
+    depending on what was found: whether he posted in target,
+    origin subreddits, etc.
+
+    There is room for a lot of improvement
+
+    Parameters
+    ----------
+    target : praw.objects.Submission
+    redditor : praw.objects.Redditor
+        A redditor who commented in target thread
+    """
+
+    class Category(Enum):
+        NO = 0b00
+        THERE = 0b01
+        HERE = 0b10
+        BOTH = 0b11
+
+        def __str__(self):
+            return {self.NO: "not active here nor there",
+                    self.THERE: "active only there",
+                    self.HERE: "active only here",
+                    self.BOTH: "active both here and there"}[self]
+
+    def __init__(self, target, redditor):
+        self.target = target
+        self.subreddit = target.subreddit
+        self.redditor = redditor
+
+        self.target_activity = []
+        self.origin_activity = []
+
+        self._retrieve_activity()
+
+    @property
+    def category(self):
+        return self.Category(self.Category.THERE.value * self.active_in_target +
+                             self.Category.HERE.value * self.active_in_origin)
+
+    @property
+    def score(self):
+        return 0
+
+    @property
+    def active_in_origin(self):
+        return bool(self.origin_activity)
+
+    @property
+    def active_in_target(self):
+        return bool(self.target_activity)
+
+    def _retrieve_activity(self):
+        overview = self.redditor.get_overview(limit=100)
+        for o in overview:
+            self._compute_influence_of(o)
+
+    def _compute_influence_of(self, action):
+        if action.subreddit == subreddit:
+            # happens in the origin
+            self.origin_activity.append(action.permalink)
+
+        if action.subreddit == self.subreddit:
+            # happens in the target
+            try:
+                # Is it an early comment from the target thread?
+                if action.submission != self.target \
+                   or action.created_utc < action.submission.created_utc:
+                    # no it's not / yet it is but it is older
+                    self.target_activity.append(action.permalink)
+                    logging.debug("%s cleared by comment %s",
+                                  self.redditor.name, action.permalink)
+            except AttributeError:
+                # `redditor` submitted something in `subreddit`
+                self.target_activity.append(action.permalink)
+                logging.debug("%s cleared by item %s",
+                              self.redditor.name, action)
+
 
 if __name__ == '__main__':
     pp = PopcornPisser()
