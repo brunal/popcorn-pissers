@@ -21,24 +21,28 @@ import logging as log
 from enum import Enum
 import praw
 
-logging = log.getLogger('bru.pp')
-logging.setLevel(log.DEBUG)
 
-stderr = log.StreamHandler()
-stderr.setLevel(log.INFO)
-logging.addHandler(stderr)
+def setup_logging():
+    pp_logging = log.getLogger('bru.pp')
+    pp_logging.setLevel(log.DEBUG)
 
-to_file = log.FileHandler('log.txt')
-to_file.setLevel(log.DEBUG)
-logging.addHandler(to_file)
+    stderr = log.StreamHandler()
+    stderr.setLevel(log.INFO)
+    pp_logging.addHandler(stderr)
 
+    to_file = log.FileHandler('log.txt')
+    to_file.setLevel(log.DEBUG)
+    pp_logging.addHandler(to_file)
+
+    return pp_logging
+
+logging = setup_logging()
 logging.debug("Loggers configured")
 
 
 @total_ordering
 class OrderedComment(praw.objects.Comment):
     """Comment with sort on creation date
-
 
     Parameters
     ----------
@@ -52,23 +56,47 @@ class OrderedComment(praw.objects.Comment):
     def __gt__(self, other):
         return self.created_utc > other.created_utc
 
-config = ConfigParser()
-config.read('settings.txt')
+    def __eq__(self, other):
+        return self.permalink == other.permalink
 
-r = praw.Reddit("popcorn-pissers by /u/Laugarhraun")
-r.login(config.get('auth', 'username'),
-        config.get('auth', 'password'))
-logging.info("Bot logged in")
 
-subreddit = config.get('subreddit', 'subreddit')
-s = r.get_subreddit(subreddit)
+def get_config(name='settings.txt'):
+    config = ConfigParser()
+    config.read(name)
+    return config
+
+
+def reddit_instance(config):
+    r = praw.Reddit("popcorn-pissers by /u/Laugarhraun")
+    r.login(config.get('auth', 'username'),
+            config.get('auth', 'password'))
+    logging.info("Bot logged in")
+
+    subreddit_name = config.get('subreddit', 'subreddit')
+    s = r.get_subreddit(subreddit_name)
+
+    return r, s
 
 
 class PopcornPisser(Thread):
-    """Indefinitely look for new submissions and watch them"""
-    def __init__(self):
+    """Indefinitely look for new submissions and watch them
+
+    Parameters
+    ----------
+    reddit : praw.objects.Reddit
+    subreddit : praw.objects.Subreddit
+
+    Attributes
+    ----------
+    reddit : praw.objects.Reddit
+    subreddit : praw.objects.Subreddit
+    submissions_seen : set of praw.objects.Submission
+    """
+    def __init__(self, reddit, subreddit):
         super(PopcornPisser, self).__init__()
         self.submissions_seen = set()
+        self.reddit = reddit
+        self.subreddit = subreddit
 
     def get_submissions_to_watch(self):
         """Get hot submissions that haven't been treated
@@ -77,7 +105,7 @@ class PopcornPisser(Thread):
         -------
         hot_and_new : praw.objects.Submission list
         """
-        hot = s.get_hot(limit=10)
+        hot = self.subreddit.get_hot(limit=10)
         hot_and_new = [h for h in hot if h.name not in self.submissions_seen]
         self.submissions_seen |= {h.name for h in hot_and_new}
         return hot_and_new
@@ -96,11 +124,19 @@ class PopcornPisser(Thread):
 
 
 class SubmissionWatcher(Thread):
-    """Each instance is responsible for watching a single reddit thread
+    """Watch a single reddit thread
 
     Parameters
     ----------
     submission : praw.objects.Submission
+
+    Attributes
+    ----------
+    submission, target : praw.objects.Submission
+    short_name : str
+    popcorn_pissers : list of praw.objects.Redditor
+    commenters_seen : list of praw.objects.Redditor
+    comment_posted : praw.objects.Comment
     """
     def __init__(self, submission):
         super(SubmissionWatcher, self).__init__()
@@ -179,6 +215,8 @@ class SubmissionWatcher(Thread):
                          self.short_name)
             return
 
+        # FIXME: submission target may be a comment; does that work?
+        r = self.submission.reddit_session
         self.target = r.get_submission(self.submission.url)
 
         nothing_new = 0
@@ -186,7 +224,7 @@ class SubmissionWatcher(Thread):
             logging.debug("SW for %s starts working", self.short_name)
 
             for user, comments in self.get_recent_commenters():
-                m = Membership(self.target, user)
+                m = Membership(self.submission.subreddit, self.target, user)
                 if m.category is not Membership.Category.THERE:
                     self.popcorn_pissers.append((m, comments))
                     logging.debug("Found a popcorn pisser: %s!", user.name)
@@ -247,6 +285,7 @@ class Membership(object):
 
     Parameters
     ----------
+    origin_subreddit : praw.objects.Subreddit
     target : praw.objects.Submission
     redditor : praw.objects.Redditor
         A redditor who commented in target thread
@@ -264,9 +303,10 @@ class Membership(object):
                     self.HERE: "active only here",
                     self.BOTH: "active both here and there"}[self]
 
-    def __init__(self, target, redditor):
+    def __init__(self, origin_subreddit, target, redditor):
         self.target = target
-        self.subreddit = target.subreddit
+        self.target_subreddit = target.subreddit
+        self.origin_subreddit = origin_subreddit
         self.redditor = redditor
 
         self.target_activity = []
@@ -293,15 +333,14 @@ class Membership(object):
 
     def _retrieve_activity(self):
         overview = self.redditor.get_overview(limit=100)
-        for o in overview:
-            self._compute_influence_of(o)
+        map(self._compute_influence_of, overview)
 
     def _compute_influence_of(self, action):
-        if action.subreddit == subreddit:
+        if action.subreddit == self.origin_subreddit:
             # happens in the origin
             self.origin_activity.append(action.permalink)
 
-        if action.subreddit == self.subreddit:
+        if action.subreddit == self.target_subreddit:
             # happens in the target
             try:
                 # Is it an early comment from the target thread?
@@ -318,6 +357,12 @@ class Membership(object):
                               self.redditor.name, action)
 
 
-if __name__ == '__main__':
-    pp = PopcornPisser()
+def main():
+    config = get_config()
+    reddit, subreddit = reddit_instance(config)
+    pp = PopcornPisser(reddit, subreddit)
     pp.start()
+
+
+if __name__ == '__main__':
+    main()
