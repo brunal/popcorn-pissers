@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime
 
-from praw import objects, Reddit as R
+from praw import objects
 
 from pp import PopcornPisser, OrderedComment
 
