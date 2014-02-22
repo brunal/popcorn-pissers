@@ -31,16 +31,13 @@ class TestPopcornPisser(unittest.TestCase):
         Subreddit = MagicMock(autospec=objects.Subreddit)
         subreddit = Subreddit()
 
-        Reddit = MagicMock(autospec=R)
-        reddit = Reddit()
-
         s1 = MagicMock(name='s1')
         s1.name = 's1'
         s2 = MagicMock(name='s2')
         s2.name = 's2'
         subreddit.get_hot.return_value = [s1, s2]
 
-        pp = PopcornPisser(reddit, subreddit)
+        pp = PopcornPisser(subreddit)
         hot_and_new = pp.get_submissions_to_watch()
 
         subreddit.get_hot.assert_called_once_with(limit=10)

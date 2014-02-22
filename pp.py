@@ -83,19 +83,16 @@ class PopcornPisser(Thread):
 
     Parameters
     ----------
-    reddit : praw.objects.Reddit
     subreddit : praw.objects.Subreddit
 
     Attributes
     ----------
-    reddit : praw.objects.Reddit
     subreddit : praw.objects.Subreddit
     submissions_seen : set of praw.objects.Submission
     """
-    def __init__(self, reddit, subreddit):
+    def __init__(self, subreddit):
         super(PopcornPisser, self).__init__()
         self.submissions_seen = set()
-        self.reddit = reddit
         self.subreddit = subreddit
 
     def get_submissions_to_watch(self):
@@ -359,9 +356,9 @@ class Membership(object):
 
 def main():
     config = get_config()
-    reddit, subreddit = reddit_instance(config)
-    pp = PopcornPisser(reddit, subreddit)
-    pp.start()
+    _, subreddit = reddit_instance(config)
+    bot = PopcornPisser(subreddit)
+    bot.start()
 
 
 if __name__ == '__main__':
